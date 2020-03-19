@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters: 
+  NumSev:
+    Type: Number
+    Description: Severity value
+    Default: 4
+
+Resources:
+  EventsRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Name: AlertGuardDutyFindings
+      Description: "Alert to SNS topic when find threats by GuardDuty"
+      EventPattern: |
+                   {
+                      "source": [
+                        "aws.guardduty"
+                      ],
+                      "detail-type": [
+                        "GuardDuty Finding"
+                      ],
+                      "detail": {
+                        "severity": [
+                          {
+                            "numeric": [
+                              ">=",
+                              ${NumSev}
+                            ]
+                          }
+                        ]
+                      }
+                    }
