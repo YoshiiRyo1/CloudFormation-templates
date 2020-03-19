@@ -11,7 +11,7 @@ Resources:
     Properties:
       Name: AlertGuardDutyFindings
       Description: "Alert to SNS topic when find threats by GuardDuty"
-      EventPattern: |
+      EventPattern: !Sub |
                    {
                       "source": [
                         "aws.guardduty"
