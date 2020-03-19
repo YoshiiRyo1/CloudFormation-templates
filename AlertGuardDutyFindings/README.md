@@ -9,7 +9,13 @@ GuardDuty の重要度レベルと Severity の関係。
 低： 0.1〜3.9 の範囲  
 
 ## テンプレート
-[yaml/AlertGuardDutyFindings.yaml](AlertGuardDutyFindings.yaml)
+### yaml
+[AlertGuardDutyFindings.yaml](yaml/AlertGuardDutyFindings.yaml)
+
+### パラメーター
+|値|説明|
+|---|---|
+|Number|GuardDuty の重要度値 (Severity Value)|
 
 ## ブログ
-[https://dev.classmethod.jp/cloud/aws/guardduty-event-filter/](GuardDutyの通知が重要度でフィルター可能になりました)
+[GuardDutyの通知が重要度でフィルター可能になりました](https://dev.classmethod.jp/cloud/aws/guardduty-event-filter/)
