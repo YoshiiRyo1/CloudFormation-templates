@@ -15,7 +15,7 @@ GuardDuty の重要度レベルと Severity の関係。
 ### パラメーター
 |値|説明|
 |---|---|
-|Number|GuardDuty の重要度値 (Severity Value)|
+|NumSev|GuardDuty の重要度値 (Severity Value)|
 
 ## ブログ
 [GuardDutyの通知が重要度でフィルター可能になりました](https://dev.classmethod.jp/cloud/aws/guardduty-event-filter/)
