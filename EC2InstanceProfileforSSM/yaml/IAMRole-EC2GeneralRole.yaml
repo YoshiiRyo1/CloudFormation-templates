@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create IAM Role
+Parameters: 
+
+  IAMRoleName:
+    Type: String
+    Description: IAM Role Name
+    Default: EC2GeneralRole
+
+Resources: 
+  IAMROLE:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      RoleName: !Ref IAMRoleName
+
+  InstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      InstanceProfileName: !Ref IAMRoleName
+      Path: "/"
+      Roles:
+        - !Ref IAMROLE
+
+Outputs:
+  IAMRoleArn:
+    Description: IAM Role Arn
+    Value:
+      Fn::GetAtt: 
+        - "IAMROLE"
+        - "Arn"
+
