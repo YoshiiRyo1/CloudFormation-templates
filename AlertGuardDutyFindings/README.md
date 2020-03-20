@@ -1,6 +1,6 @@
 # AlertGuardDutyFindings
 
-GuardDuty の通知を重要度でフィルターします。  
+GuardDuty の通知を重要度でフィルターするための EventBridge ルールです。  
 
 GuardDuty の重要度レベルと Severity の関係。  
 
