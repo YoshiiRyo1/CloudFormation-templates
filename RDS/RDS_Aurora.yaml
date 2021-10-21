@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create a Autora Cluster.
+Parameters: 
+  InstanceType:
+    Description: DB instance type
+    Type: String
+    Default: db.t3.medium
+    AllowedValues:
+      - db.t3.medium
+      - db.r4.large
+      - db.r4.xlarge
+      - db.r4.2xlarge
+      - db.r4.4xlarge
+      - db.t2.small
+      - db.t2.medium
+    ConstraintDescription: must be a valid EC2 instance type.
+
+  BackupRetentionPeriod:
+    Description: The number of days for which automated backups are retained.
+    Type: Number
+    Default: 7
+
+  DatabaseName:
+    Description: The name for your database of up to 64 alpha-numeric characters. 
+    Type: String
+
+  DBClusterIdentifier:
+    Description: The DB cluster identifier. This parameter is stored as a lowercase string.
+    Type: String
+
+  DBClusterParameterGroupName:
+    Description: The name of the DB cluster parameter group to associate with this DB cluster.
+    Type: String
+
+  DBInstanceIdentifier:
+    Description: The DB instance identifier. This parameter is stored as a lowercase string.
+    Type: String
+
+  DBSubnetGroupName:
+    Description: A DB subnet group that you want to associate with this DB cluster.
+    Type: String
+
+  DBParameterGroupName:
+    Description: The name of an existing DB parameter group .
+    Type: String
+
+  MasterUsername:
+    Description: The name of the master user for the DB cluster.
+    Type: String
+
+  MasterUserPassword:
+    Description: The password for the master database user. 
+    Type: String
+
+  PreferredBackupWindow:
+    Description: The daily time range in UTC during which you want to create automated backups. 
+    Type: String
+    Default: 19:00-20:00
+
+  PreferredMaintenanceWindow:
+    Description: The weekly time range (in UTC) during which system maintenance can occur.
+    Type: String
+    Default: Sat:18:00-Sat:19:00
+
+  Engine:
+    Description: The name of the database engine that you want to use for this DB cluster.
+    Type: String
+
+  VpcSecurityGroupIds:
+    Description: A list of VPC security groups to associate with this DB cluster.
+    Type: String
+
+  EnablePerformanceInsights:
+    Description: If set to true, enables Performance Insights for the DB instance.
+    Type: String
+    Default: false
+
+Resources: 
+  DBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      BackupRetentionPeriod: !Ref BackupRetentionPeriod
+      DatabaseName: !Ref DatabaseName
+      DBClusterIdentifier: !Ref DBClusterIdentifier
+      DBClusterParameterGroupName: 
+        Fn::ImportValue: !Sub ${DBClusterParameterGroupName}
+      DBSubnetGroupName: !Ref DBSubnetGroupName
+      DeletionProtection: true
+      EnableCloudwatchLogsExports: 
+        - error
+        - general
+        - slowquery
+        - audit
+      Engine: !Ref Engine
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref MasterUserPassword
+      PreferredBackupWindow: !Ref PreferredBackupWindow
+      PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+      VpcSecurityGroupIds: 
+        -
+          Fn::ImportValue: !Sub ${VpcSecurityGroupIds}
+      Tags:
+        - 
+          Key: Name
+          Value: !Ref DBClusterIdentifier
+
+  DBInstance1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      DBClusterIdentifier: !Ref DBCluster
+      DBInstanceClass: !Ref InstanceType
+      DBInstanceIdentifier: !Join [ "-", [ !Ref DBInstanceIdentifier, ap-northeast-1a ] ]
+      DBParameterGroupName:
+        Fn::ImportValue: !Sub ${DBParameterGroupName}
+      DBSubnetGroupName:
+        Fn::ImportValue: !Sub ${DBSubnetGroupName}
+      EnablePerformanceInsights: !Ref EnablePerformanceInsights
+      Engine: !Ref Engine
+      PubliclyAccessible: false
+      Tags:
+        - 
+          Key: Name
+          Value: !Join [ "-", [ !Ref DBInstanceIdentifier, ap-northeast-1a ] ]
+
+  DBInstance2:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      DBClusterIdentifier: !Ref DBCluster
+      DBInstanceClass: !Ref InstanceType
+      DBInstanceIdentifier: !Join [ "-", [ !Ref DBInstanceIdentifier, ap-northeast-1c ] ]
+      DBParameterGroupName:
+        Fn::ImportValue: !Sub ${DBParameterGroupName}
+      DBSubnetGroupName:
+        Fn::ImportValue: !Sub ${DBSubnetGroupName}
+      EnablePerformanceInsights: !Ref EnablePerformanceInsights
+      Engine: !Ref Engine
+      PubliclyAccessible: false
+      Tags:
+        - 
+          Key: Name
+          Value: !Join [ "-", [ !Ref DBInstanceIdentifier, ap-northeast-1c ] ]
+
+Outputs:
+  DBClusterEndpoint:
+    Description: EndPoint URL of DB Cluster.
+    Value: !GetAtt DBCluster.Endpoint.Address
+  DBClusterPort:
+    Description: EndPoint Port of DB Cluster.
+    Value: !GetAtt DBCluster.Endpoint.Port

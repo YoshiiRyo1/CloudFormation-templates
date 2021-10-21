@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Create SecurityGroup for ECS.
+
+Parameters: 
+  NameTagPrefix:
+    Type: String
+    Description: "The Value of Name Tag"
+
+  ContainerName:
+    Type: String
+    Description: "The Name of Container"
+
+  ContainerPort:
+    Type: String
+    Description: "The Port of Container"
+
+  SourcecIP:
+    Description: The IP address range that can be used to Service
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+
+
+Resources: 
+
+### Security Group
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Ref NameTagPrefix
+      GroupDescription: "ECS Security Group"
+      VpcId:
+        Fn::ImportValue: !Sub ${NameTagPrefix}-VPC
+      Tags:
+        - 
+          Key: Name
+          Value: !Ref NameTagPrefix
+
+  ECSSecurityGroupIngress1:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ECSSecurityGroup
+      IpProtocol: tcp
+      FromPort: !Ref ContainerPort
+      ToPort: !Ref ContainerPort
+      Description: ""
+      CidrIp: !Ref SourcecIP
+
+### ECS Role
+  TASKROLE:
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          -
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ecs-tasks.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - "logs:CreateLogGroup"
+                  - "logs:DescribeLogGroups"
+                  - "logs:CreateLogStream"
+                  - "logs:DescribeLogStreams"
+                  - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:log-group:/aws/ecs/*"
+      RoleName: tmccnECSTaskRole
+
+### ECS Execution Role
+  TASKEXECUTIONROLE:
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          -
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ecs-tasks.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      RoleName: tmccnECSTaskExecutionRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+
+### ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref ContainerName
+
+### ECS Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        -
+          Name: !Ref ContainerName
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.ap-northeast-1.amazonaws.com/proxy:latest
+          LogConfiguration: 
+            LogDriver: awslogs
+            Options: 
+              awslogs-group: !Ref ECSLogGroup
+              awslogs-region: ap-northeast-1
+              awslogs-stream-prefix: squid
+          PortMappings:
+            -
+              ContainerPort: 3128
+              HostPort: 3128
+      Cpu: 512
+      ExecutionRoleArn: !Ref TASKEXECUTIONROLE
+      Family: !Ref ContainerName
+      Memory: 1024
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      TaskRoleArn: !Ref TASKROLE
+
+
+### ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties: 
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: 1
+      LaunchType: FARGATE
+      LoadBalancers:
+        -
+          ContainerName: !Ref ContainerName
+          ContainerPort: 3128
+          TargetGroupArn: 
+            Fn::ImportValue: !Sub ${NameTagPrefix}-TargetGroup1Arn
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups: 
+            - !Ref ECSSecurityGroup
+          Subnets: 
+            - Fn::ImportValue: !Sub ${NameTagPrefix}-AppSubnet1
+            - Fn::ImportValue: !Sub ${NameTagPrefix}-AppSubnet2
+            - Fn::ImportValue: !Sub ${NameTagPrefix}-AppSubnet3
+      ServiceName: !Ref ContainerName
+      TaskDefinition: !Ref TaskDefinition
+
+### CloudWatch Logs
+  ECSLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub /aws/ecs/${ContainerName}

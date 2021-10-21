@@ -1,0 +1,164 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 launch httpd installed
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - 
+        Label:
+          default: EC2 Configuration
+        Parameters:
+          - NameTag
+          - ImageId
+          - InstanceType
+          - VolumeSize
+          - KeyName
+          - SSHLocation
+      - 
+        Label:
+          default: VPC Configuration
+        Parameters:
+          - VpcId
+          - SubnetId
+
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+  NameTag:
+    Description: EC2 Name
+    Type: String
+ 
+  ImageId:
+    Description: Base Image ID. <<<DO NOT CHANGE>>
+    Type: String
+
+  VpcId:
+    Description: The ID of the VPC for the security group.
+    Type: AWS::EC2::VPC::Id
+
+  SubnetId:
+    Description: The ID of the subnet to launch the instance into.
+    Type: AWS::EC2::Subnet::Id
+
+  VolumeSize:
+    Description: The size of the volume, in GiBs.
+    Type: Number
+    Default: 8
+
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t3.nano
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+      - t3a.nano
+      - t3a.micro
+      - t3a.small
+      - t3a.medium
+      - t3a.large
+      - c4.large
+      - c5.large
+      - i3.large
+      - m4.large
+      - m5.large
+      - m5a.large
+      - m5ad.large
+      - m5d.large
+      - m5dn.large
+      - m5n.large
+      - m5zn.large
+      - m6i.large
+      - r4.large
+      - r5.large
+      - r5a.large
+      - r5ad.large
+      - r5b.large
+      - r5d.large
+      - r5dn.large
+      - r5n.large
+      - z1d.large
+    ConstraintDescription: must be a valid EC2 instance type.
+
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+
+Resources:
+### EC2
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      BlockDeviceMappings:
+        -
+          DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: True
+            VolumeSize: !Ref VolumeSize
+      ImageId:  !Ref ImageId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      SubnetId: !Ref SubnetId
+      Tags:
+          - Key: Name
+            Value: !Ref NameTag
+      UserData: !Base64 |
+        #!/bin/bash
+        sudo yum update -y
+
+### SecurityGroup of EC2
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH access via port 22
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+      Tags:
+          - Key: Name
+            Value: !Ref NameTag
+      VpcId: !Ref VpcId
+
+### EC2 AutoRecovery
+  RecoveryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${EC2Instance}_StatusCheckFailed_System
+      AlarmDescription: Trigger a recovery when instance status check fails for 2 consecutive minutes.
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_System
+      Statistic: Minimum
+      Period: '60'
+      EvaluationPeriods: '2'
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: '0'
+      AlarmActions: [ !Sub "arn:aws:automate:${AWS::Region}:ec2:recover" ]
+      Dimensions:
+      - Name: InstanceId
+        Value: !Ref EC2Instance
+ 
+
+Outputs:
+  InstanceId:
+    Description: InstanceId of the newly created EC2 instance
+    Value: !Ref 'EC2Instance'
+

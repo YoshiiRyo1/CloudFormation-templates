@@ -1,0 +1,16 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create SNS Topic
+Parameters: 
+  DisplayName:
+    Type: String
+    Description: The display name to use for an Amazon SNS topic with SMS subscriptions.
+
+Resources: 
+  MySNSTopic:
+    Type: AWS::SNS::Topic
+      DisplayName: !Ref DisplayName
+
+Outputs:
+  SNSTopicArn:
+    Description: SNS Topic Arn
+    Value: !Ref MySNSTopic

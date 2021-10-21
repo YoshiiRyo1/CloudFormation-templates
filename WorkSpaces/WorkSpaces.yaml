@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: WorkSpaces Template
+
+Parameters:
+  Bundle:
+    Type: String
+    Description: Select the bundle that should be deployed
+
+  DirectoryID:
+    Type: String
+    Description: Enter the Directory ID for the WorkSpace (Directory Services or AD Connector)
+
+  UserName:
+    Type: String
+    Description: The user name of the user for the WorkSpace.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "WorkSpace Configuration"
+        Parameters:
+          - Bundle
+          - DirectoryID
+          - UserName
+
+
+Resources:
+  WorkSpaces1:
+    Type: AWS::WorkSpaces::Workspace
+    Properties: 
+      BundleId: !Ref Bundle
+      DirectoryId: !Ref DirectoryID
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-VPC
+      UserName: !Ref UserName
+
+
+
+

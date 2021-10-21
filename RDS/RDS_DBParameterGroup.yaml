@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create a Autora DB Parameter Group.
+Parameters: 
+  TagNameValue:
+    Type: String
+    Description: The Value of Name Tag
+
+  Family:
+    Type: String
+    Description: The database family of this RDS parameter group.
+    Default: aurora-mysql5.7
+
+Resources: 
+  DBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: ott DB Parameter Group
+      Family: !Ref Family
+      Tags:
+        - 
+          Key: Name
+          Value: !Ref TagNameValue
+
+Outputs:
+  DBParameterGroupID:
+    Description: DB Parameter Group ID.
+    Value: !Ref DBParameterGroup
+    Export:
+      Name: !Ref TagNameValue
+

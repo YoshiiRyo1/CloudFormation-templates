@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: "Proxy Template"
+
+Parameters:
+  NameTagPrefix:
+    Type: String
+    Description: Prefix of Name tags.
+    Default: "proxy-nlb"
+
+Resources: 
+
+### VPC EndpointService NLB
+  EndpointService:
+    Type: AWS::EC2::VPCEndpointService
+    Properties: 
+      AcceptanceRequired: true
+      NetworkLoadBalancerArns: 
+        - Fn::ImportValue: !Sub ${NameTagPrefix}-NLBArn
+

@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create SecurityGroup for ECS.
+Parameters: 
+  EnvPrefix:
+    Type: String
+    Description: Prefix.
+  TagNameValue:
+    Type: String
+    Description: The Value of Name Tag
+  ECSLBSecurityGroup:
+    Type: String
+    Description: The SecurityGroupID that you associeate with ELB.
+  BSSecurityGroup:
+    Type: String
+    Description: The Security Group ID that you associate with Bastion.
+  APIPort:
+    Type: String
+    Description: TCP Port Number of API.  
+Resources: 
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Ref TagNameValue
+      GroupDescription: ECS Security Group
+      VpcId:
+        Fn::ImportValue: !Sub ${EnvPrefix}-VPC
+      Tags:
+        - 
+          Key: Name
+          Value: !Ref TagNameValue
+
+  ECSSecurityGroupIngress1:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ECSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref ECSSecurityGroup
+      Description: This Security Group.
+
+  ECSSecurityGroupIngress2:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ECSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: 
+        Fn::ImportValue: !Sub ${ECSLBSecurityGroup}
+      Description: ECS LB Security Group.
+
+  ECSSecurityGroupIngress3:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ECSSecurityGroup
+      IpProtocol: tcp
+      FromPort: !Ref APIPort
+      ToPort: !Ref APIPort
+      SourceSecurityGroupId: !Ref ECSSecurityGroup
+      Description: This Security Group.
+
+  ECSSecurityGroupIngress4:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ECSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: 
+        Fn::ImportValue: !Sub ${BSSecurityGroup}
+      Description: Bastion Security Group.
+
+
+Outputs:
+  ECSSecurityGroupID:
+    Description: ECS SecurityGroup ID.
+    Value: !Ref ECSSecurityGroup
+    Export:
+      Name: !Ref TagNameValue

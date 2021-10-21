@@ -1,0 +1,350 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Create SecurityGroup for ECS.
+
+Parameters: 
+  NameTagPrefix:
+    Type: String
+    Description: "The Value of Name Tag"
+
+  ContainerName:
+    Type: String
+    Description: "The Name of Container"
+
+  ArtifactBacketName:
+    Type: String
+    Description: "NLB Log Bucket Name"
+
+Resources: 
+
+### CodePipeline ArtifactStore
+  ArtifactBacket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub ${ArtifactBacketName}-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls:  True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      VersioningConfiguration:
+        Status: Enabled 
+      Tags:
+        - Key: Name
+          Value: !Ref ArtifactBacketName
+
+### CodePipeline
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline 
+    Properties:
+      Name: !Ref ContainerName
+      RoleArn: !GetAtt IAMCodePipelineRole.Arn
+      ArtifactStore: 
+        Type: S3
+        Location: !Ref ArtifactBacket
+      Stages:
+        -
+          Name: Source 
+          Actions: 
+            - 
+              Name: SourceAction
+              ActionTypeId: 
+                Category: Source 
+                Owner: AWS 
+                Version: 1 
+                Provider: ECR 
+              Configuration: 
+                RepositoryName: !Ref ContainerName
+              RunOrder: 1 
+              OutputArtifacts:
+                - Name: SourceArtifact
+            - 
+              Name: ArtifactS3
+              ActionTypeId:
+                Category: Source 
+                Owner: AWS 
+                Version: 1 
+                Provider: S3
+              Configuration:
+                S3Bucket: !Ref ArtifactBacket
+                S3ObjectKey: imagedefinitions.json.zip
+                PollForSourceChanges: false
+              RunOrder: 2
+              OutputArtifacts:
+                - Name: S3Artifact
+        - 
+          Name: Deploy 
+          Actions: 
+            - 
+              Name: DeployAction
+              InputArtifacts: 
+                - Name: S3Artifact 
+              ActionTypeId: 
+                Category: Deploy 
+                Owner: AWS 
+                Version: 1
+                Provider: ECS 
+              Configuration: 
+                ClusterName: !Ref ContainerName
+                ServiceName: !Ref ContainerName
+                DeploymentTimeout: 10 
+              RunOrder: 1 
+
+### CodePipeline Role
+  IAMCodePipelineRole:
+      Type: 'AWS::IAM::Role'
+      Properties:
+          Path: '/service-role/'
+          RoleName: !Sub '${NameTagPrefix}-pipeline-ServiceRole'
+          AssumeRolePolicyDocument: "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"codepipeline.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+          MaxSessionDuration: 3600
+          ManagedPolicyArns: 
+            - !Ref IAMCodePipelinePolicy
+
+  IAMCodePipelinePolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Properties:
+          ManagedPolicyName: !Sub '${NameTagPrefix}-pipeline-policy'
+          Path: '/service-role/'
+          PolicyDocument: |
+              {
+                  "Statement": [
+                      {
+                          "Action": [
+                              "iam:PassRole"
+                          ],
+                          "Resource": "*",
+                          "Effect": "Allow",
+                          "Condition": {
+                              "StringEqualsIfExists": {
+                                  "iam:PassedToService": [
+                                      "cloudformation.amazonaws.com",
+                                      "elasticbeanstalk.amazonaws.com",
+                                      "ec2.amazonaws.com",
+                                      "ecs-tasks.amazonaws.com"
+                                  ]
+                              }
+                          }
+                      },
+                      {
+                          "Action": [
+                              "codecommit:CancelUploadArchive",
+                              "codecommit:GetBranch",
+                              "codecommit:GetCommit",
+                              "codecommit:GetRepository",
+                              "codecommit:GetUploadArchiveStatus",
+                              "codecommit:UploadArchive"
+                          ],
+                          "Resource": "*",
+                          "Effect": "Allow"
+                      },
+                      {
+                          "Action": [
+                              "codedeploy:CreateDeployment",
+                              "codedeploy:GetApplication",
+                              "codedeploy:GetApplicationRevision",
+                              "codedeploy:GetDeployment",
+                              "codedeploy:GetDeploymentConfig",
+                              "codedeploy:RegisterApplicationRevision"
+                          ],
+                          "Resource": "*",
+                          "Effect": "Allow"
+                      },
+                      {
+                          "Action": [
+                              "codestar-connections:UseConnection"
+                          ],
+                          "Resource": "*",
+                          "Effect": "Allow"
+                      },
+                      {
+                          "Action": [
+                              "elasticbeanstalk:*",
+                              "ec2:*",
+                              "elasticloadbalancing:*",
+                              "autoscaling:*",
+                              "cloudwatch:*",
+                              "s3:*",
+                              "sns:*",
+                              "cloudformation:*",
+                              "rds:*",
+                              "sqs:*",
+                              "ecs:*"
+                          ],
+                          "Resource": "*",
+                          "Effect": "Allow"
+                      },
+                      {
+                          "Action": [
+                              "lambda:InvokeFunction",
+                              "lambda:ListFunctions"
+                          ],
+                          "Resource": "*",
+                          "Effect": "Allow"
+                      },
+                      {
+                          "Action": [
+                              "opsworks:CreateDeployment",
+                              "opsworks:DescribeApps",
+                              "opsworks:DescribeCommands",
+                              "opsworks:DescribeDeployments",
+                              "opsworks:DescribeInstances",
+                              "opsworks:DescribeStacks",
+                              "opsworks:UpdateApp",
+                              "opsworks:UpdateStack"
+                          ],
+                          "Resource": "*",
+                          "Effect": "Allow"
+                      },
+                      {
+                          "Action": [
+                              "cloudformation:CreateStack",
+                              "cloudformation:DeleteStack",
+                              "cloudformation:DescribeStacks",
+                              "cloudformation:UpdateStack",
+                              "cloudformation:CreateChangeSet",
+                              "cloudformation:DeleteChangeSet",
+                              "cloudformation:DescribeChangeSet",
+                              "cloudformation:ExecuteChangeSet",
+                              "cloudformation:SetStackPolicy",
+                              "cloudformation:ValidateTemplate"
+                          ],
+                          "Resource": "*",
+                          "Effect": "Allow"
+                      },
+                      {
+                          "Action": [
+                              "codebuild:BatchGetBuilds",
+                              "codebuild:StartBuild",
+                              "codebuild:BatchGetBuildBatches",
+                              "codebuild:StartBuildBatch"
+                          ],
+                          "Resource": "*",
+                          "Effect": "Allow"
+                      },
+                      {
+                          "Effect": "Allow",
+                          "Action": [
+                              "devicefarm:ListProjects",
+                              "devicefarm:ListDevicePools",
+                              "devicefarm:GetRun",
+                              "devicefarm:GetUpload",
+                              "devicefarm:CreateUpload",
+                              "devicefarm:ScheduleRun"
+                          ],
+                          "Resource": "*"
+                      },
+                      {
+                          "Effect": "Allow",
+                          "Action": [
+                              "servicecatalog:ListProvisioningArtifacts",
+                              "servicecatalog:CreateProvisioningArtifact",
+                              "servicecatalog:DescribeProvisioningArtifact",
+                              "servicecatalog:DeleteProvisioningArtifact",
+                              "servicecatalog:UpdateProduct"
+                          ],
+                          "Resource": "*"
+                      },
+                      {
+                          "Effect": "Allow",
+                          "Action": [
+                              "cloudformation:ValidateTemplate"
+                          ],
+                          "Resource": "*"
+                      },
+                      {
+                          "Effect": "Allow",
+                          "Action": [
+                              "ecr:DescribeImages"
+                          ],
+                          "Resource": "*"
+                      },
+                      {
+                          "Effect": "Allow",
+                          "Action": [
+                              "states:DescribeExecution",
+                              "states:DescribeStateMachine",
+                              "states:StartExecution"
+                          ],
+                          "Resource": "*"
+                      },
+                      {
+                          "Effect": "Allow",
+                          "Action": [
+                              "appconfig:StartDeployment",
+                              "appconfig:StopDeployment",
+                              "appconfig:GetDeployment"
+                          ],
+                          "Resource": "*"
+                      }
+                  ],
+                  "Version": "2012-10-17"
+              }
+
+### CodeBuild Logs
+  CWLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/codebuild/${NameTagPrefix}-build-project
+      RetentionInDays: 14
+
+###  EventBridge for Codepipeline
+  EventBridge:
+    Type: AWS::Events::Rule
+    Properties: 
+      Name: !Sub CodePipeline-trigger-${NameTagPrefix}
+      Description: "Capture CodeCommit Event"
+      EventPattern:
+        source: 
+          - aws.ecr
+        detail-type:
+          - "ECR Image Action"
+        detail:
+          action-type: 
+            - PUSH
+          result:
+            - SUCCESS
+          repository-name:
+            - proxy 
+      Targets:
+        -
+          Arn: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${ContainerName}
+          Id: PipelineTrigger
+          RoleArn: !GetAtt IAMEventBridgeRole.Arn
+
+### EventBridge Role
+  IAMEventBridgeRole:
+      Type: 'AWS::IAM::Role'
+      Properties:
+          Path: '/service-role/'
+          RoleName: !Sub '${NameTagPrefix}-EventBridge-ServiceRole'
+          AssumeRolePolicyDocument: "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"events.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+          MaxSessionDuration: 3600
+          ManagedPolicyArns: 
+            - !Ref IAMEventBridgePolicy
+
+  IAMEventBridgePolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Properties:
+          ManagedPolicyName: !Sub '${NameTagPrefix}-EventBridge-Policy'
+          Path: '/service-role/'
+          PolicyDocument: !Sub |
+              {
+                  "Version" : "2012-10-17",
+                  "Statement" : [
+                    {
+                        "Effect" : "Allow",
+                        "Action" : [
+                            "codepipeline:StartPipelineExecution"
+                        ],
+                        "Resource" : [
+                            "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${ContainerName}"
+                        ]
+                      }
+                  ]
+              }
+

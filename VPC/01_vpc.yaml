@@ -1,0 +1,284 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "VPC Network Template"
+
+Parameters:
+  NameTagPrefix:
+    Type: String
+    Description: Prefix of Name tags.
+    Default: "proxy-nlb"
+
+  VPCCIDR:
+    Description: First and Second Octet of VPC, For example xxx.xxx
+    Type: String
+    Default: "10.1"
+    AllowedPattern: "^(10\\.([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])|172\\.(1[6-9]|2[0-9]|3[0-1])|192\\.168)$"
+    ConstraintDescription: xxx.xxx
+
+Mappings:
+  StackConfig:
+    VPC:
+      CIDR: ".0.0/16"
+    LBSubnet1:
+      CIDR: ".0.0/24"
+    LBSubnet2:
+      CIDR: ".1.0/24"
+    LBSubnet3:
+      CIDR: ".2.0/24"
+    AppSubnet1:
+      CIDR: ".3.0/24"
+    AppSubnet2:
+      CIDR: ".4.0/24"
+    AppSubnet3:
+      CIDR: ".5.0/24"
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        !Sub [
+          "${VPCCIDR}${Param1}",
+          { Param1: !FindInMap [StackConfig, VPC, CIDR] },
+        ]
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-IGW
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: AttachGateway
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-public-RouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  LBSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [0, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock:
+        !Sub [
+          "${VPCCIDR}${Param1}",
+          { Param1: !FindInMap [StackConfig, LBSubnet1, CIDR] },
+        ]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-LBSubnet1
+      VpcId: !Ref VPC
+
+  LBSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [1, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock:
+        !Sub [
+          "${VPCCIDR}${Param1}",
+          { Param1: !FindInMap [StackConfig, LBSubnet2, CIDR] },
+        ]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-LBSubnet2
+      VpcId: !Ref VPC
+
+  LBSubnet3:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [2, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock:
+        !Sub [
+          "${VPCCIDR}${Param1}",
+          { Param1: !FindInMap [StackConfig, LBSubnet3, CIDR] },
+        ]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-LBSubnet3
+      VpcId: !Ref VPC
+
+  AppSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [0, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock:
+        !Sub [
+          "${VPCCIDR}${Param1}",
+          { Param1: !FindInMap [StackConfig, AppSubnet1, CIDR] },
+        ]
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-AppSubnet1
+      VpcId: !Ref VPC
+
+  AppSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  AppSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [1, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock:
+        !Sub [
+          "${VPCCIDR}${Param1}",
+          { Param1: !FindInMap [StackConfig, AppSubnet2, CIDR] },
+        ]
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-AppSubnet2
+      VpcId: !Ref VPC
+
+  AppSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  AppSubnet3:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [2, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock:
+        !Sub [
+          "${VPCCIDR}${Param1}",
+          { Param1: !FindInMap [StackConfig, AppSubnet3, CIDR] },
+        ]
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-AppSubnet3
+      VpcId: !Ref VPC
+
+  AppSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnet3
+      RouteTableId: !Ref PublicRouteTable
+
+
+Outputs:
+  VPC:
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${NameTagPrefix}-VPC
+
+  LBSubnet1:
+    Value: !Ref LBSubnet1
+    Export:
+      Name: !Sub ${NameTagPrefix}-LBSubnet1
+
+  LBSubnet2:
+    Value: !Ref LBSubnet2
+    Export:
+      Name: !Sub ${NameTagPrefix}-LBSubnet2
+
+  LBSubnet3:
+    Value: !Ref LBSubnet3
+    Export:
+      Name: !Sub ${NameTagPrefix}-LBSubnet3
+
+  AppSubnet1:
+    Value: !Ref AppSubnet1
+    Export:
+      Name: !Sub ${NameTagPrefix}-AppSubnet1
+
+  AppSubnet2:
+    Value: !Ref AppSubnet2
+    Export:
+      Name: !Sub ${NameTagPrefix}-AppSubnet2
+
+  AppSubnet3:
+    Value: !Ref AppSubnet3
+    Export:
+      Name: !Sub ${NameTagPrefix}-AppSubnet3
+
+  LBSubnetCidr1:
+    Value:
+      !Sub [
+        "${VPCCIDR}${Param1}",
+        { Param1: !FindInMap [StackConfig, LBSubnet1, CIDR] },
+      ]
+    Export:
+      Name: !Sub ${NameTagPrefix}-LBSubnetCidr1
+
+  LBSubnetCidr2:
+    Value:
+      !Sub [
+        "${VPCCIDR}${Param1}",
+        { Param1: !FindInMap [StackConfig, LBSubnet2, CIDR] },
+      ]
+    Export:
+      Name: !Sub ${NameTagPrefix}-LBSubnetCidr2
+
+  LBSubnetCidr3:
+    Value:
+      !Sub [
+        "${VPCCIDR}${Param1}",
+        { Param1: !FindInMap [StackConfig, LBSubnet3, CIDR] },
+      ]
+    Export:
+      Name: !Sub ${NameTagPrefix}-LBSubnetCidr3
+
+  AppSubnetCidr1:
+    Value:
+      !Sub [
+        "${VPCCIDR}${Param1}",
+        { Param1: !FindInMap [StackConfig, AppSubnet1, CIDR] },
+      ]
+    Export:
+      Name: !Sub ${NameTagPrefix}-AppSubnetCidr1
+
+  AppSubnetCidr2:
+    Value:
+      !Sub [
+        "${VPCCIDR}${Param1}",
+        { Param1: !FindInMap [StackConfig, AppSubnet2, CIDR] },
+      ]
+    Export:
+      Name: !Sub ${NameTagPrefix}-AppSubnetCidr2
+
+  AppSubnetCidr3:
+    Value:
+      !Sub [
+        "${VPCCIDR}${Param1}",
+        { Param1: !FindInMap [StackConfig, AppSubnet3, CIDR] },
+      ]
+    Export:
+      Name: !Sub ${NameTagPrefix}-AppSubnetCidr3

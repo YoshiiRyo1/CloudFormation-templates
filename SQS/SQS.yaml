@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create SQS
+Parameters: 
+  QueueName:
+    Type: String
+    Description: A name for the queue.
+
+Resources: 
+  SQSQueue:
+    Type: AWS::SQS::Queue
+    Properties: 
+      QueueName: !Ref QueueName
+      RedrivePolicy: 
+        deadLetterTargetArn: 
+          Fn::GetAtt: 
+            - "DLQueue"
+            - "Arn"
+        maxReceiveCount: 5
+      Tags:
+        -
+          Key: Name
+          Value: !Ref QueueName
+
+  DLQueue:
+    Type: AWS::SQS::Queue
+    Properties: 
+      QueueName: !Sub ${QueueName}DeadLetter
+      Tags:
+        -
+          Key: Name
+          Value: !Sub ${QueueName}DeadLetter
+      
+Outputs:
+  SQSQueueURL:
+    Description: SQS Queue Name
+    Value: !Ref SQSQueue
+  SQSQueueARN:
+    Description: SQS Queue ARN
+    Value:
+      Fn::GetAtt: 
+        - "SQSQueue"
+        - "Arn"
+  DLQueueURL:
+    Description: DeadLetter Queue Name
+    Value: !Ref DLQueue
+  DLQueueARN:
+    Description: DeadLetter Queue ARN
+    Value:
+      Fn::GetAtt: 
+        - "DLQueue"
+        - "Arn"

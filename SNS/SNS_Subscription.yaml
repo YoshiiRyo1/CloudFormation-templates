@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create SNS Subscription
+Parameters: 
+  TopicArn:
+    Type: String
+    Description: The ARN of the topic to subscribe to.
+  Endpoint:
+    Type: String
+    Description: The subscription's endpoint. If the Protocol is email, specify your email. 
+  Protocol:
+    Type: String
+    Description: The subscription's protocol.
+    Default: email
+
+Resources: 
+  MySubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !Ref Endpoint
+      Protocol: !Ref Protocol
+      TopicArn: !Ref TopicArn
+

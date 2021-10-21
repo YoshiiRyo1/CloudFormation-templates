@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create DB SubnetGroup.
+Parameters: 
+  TagNameValue:
+    Type: String
+    Description: The Value of Name Tag
+
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC ID that you associate with a EIPs.
+
+  DBSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID that you associate with LoadBalancer
+
+  DBSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID that you associate with LoadBalancer
+
+Resources: 
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: RDS Autora Subnet Group
+      DBSubnetGroupName: !Ref TagNameValue
+      SubnetIds: 
+        - !Ref DBSubnet1
+        - !Ref DBSubnet2
+      Tags:
+        - 
+          Key: Name
+          Value: !Ref TagNameValue
+
+Outputs:
+  RDSSubnetGroupID:
+    Description: RDS SubnetGroup ID.
+    Value: !Ref RDSSubnetGroup
+    Export:
+      Name: !Ref TagNameValue

@@ -1,0 +1,277 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: VPC Network Template
+
+Parameters:
+  NameTagPrefix:
+    Type: String
+    Description: Prefix of Name tags.
+
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.0.0.0/16
+
+  PublicSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.0.0.0/24
+
+  PublicSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.0.1.0/24
+
+  PublicSubnet3CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.0.2.0/24
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.0.128.0/24
+
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.0.129.0/24
+
+  PrivateSubnet3CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.0.130.0/24
+
+  DirectoryFQDN:
+    Description: The fully qualified name for the directory
+    Type: String
+    AllowedPattern: "^([a-zA-Z0-9]+[\\.-])+([a-zA-Z0-9])+$"
+
+  AdministratorPassword:
+    NoEcho: true
+    Description: The password for the directory administrator.
+    Type: String
+
+  DirectorySize:
+    Description: The size of the directory. 
+    Type: String
+    Default: Small
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label: 
+          default: "VPC Configuration"
+        Parameters:
+          - VpcCIDR
+          - PublicSubnet1CIDR
+          - PublicSubnet2CIDR
+          - PublicSubnet3CIDR
+          - PrivateSubnet1CIDR
+          - PrivateSubnet2CIDR
+          - PrivateSubnet3CIDR
+
+      -
+        Label: 
+          default: "SimpleAD Configuration"
+        Parameters:
+          - DirectoryFQDN
+          - AdministratorPassword
+          - DirectorySize
+
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-IGW
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: AttachGateway
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-public-RouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: AttachGateway
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-private-RouteTable
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-PublicSubnet1
+      VpcId: !Ref VPC
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-PublicSubnet2
+      VpcId: !Ref VPC
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet3CIDR
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-PublicSubnet3
+      VpcId: !Ref VPC
+
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-PrivateSubnet1
+      VpcId: !Ref VPC
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-PrivateSubnet2
+      VpcId: !Ref VPC
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnet3CIDR
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-PrivateSubnet3
+      VpcId: !Ref VPC
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      RouteTableId: !Ref PrivateRouteTable
+
+  WorkSpacesDirectory:
+    Type: AWS::DirectoryService::SimpleAD
+    Properties:
+      Description: "WorkSpaces Directory"
+      Name: !Ref DirectoryFQDN
+      Password: !Ref AdministratorPassword
+      Size: !Ref DirectorySize
+      VpcSettings: #required
+        SubnetIds: 
+          - Ref: PrivateSubnet1
+          - Ref: PrivateSubnet2
+        VpcId: 
+          Ref: VPC
+
+
+Outputs:
+  VPC:
+    Description: A reference to the created VPC
+    Value: !Ref VPC
+
+  PublicSubnet1:
+    Description: A reference to the public subnet in the 1st Availability Zone
+    Value: !Ref PublicSubnet1
+
+  PublicSubnet2:
+    Description: A reference to the public subnet in the 2nd Availability Zone
+    Value: !Ref PublicSubnet2
+
+  PublicSubnet3:
+    Description: A reference to the public subnet in the 3rd Availability Zone
+    Value: !Ref PublicSubnet3
+
+  PrivateSubnet1:
+    Description: A reference to the private subnet in the 1st Availability Zone
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2:
+    Description: A reference to the private subnet in the 2nd Availability Zone
+    Value: !Ref PrivateSubnet2
+
+  PrivateSubnet3:
+    Description: A reference to the private subnet in the 3rd Availability Zone
+    Value: !Ref PrivateSubnet3

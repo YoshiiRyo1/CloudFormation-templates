@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create CloudWatch Alarm
+Parameters: 
+  TopicArn:
+    Type: String
+    Description: The ARN of the topic to subscribe to.
+  AlarmName:
+    Type: String
+    Description: The Alarm Name. 
+  ComparisonOperator:
+    Type: String
+    Description: You can specify the following values: GreaterThanThreshold, GreaterThanOrEqualToThreshold, LessThanThreshold, or LessThanOrEqualToThreshold.
+  DatapointsToAlarm:
+    Type: Integer
+    Description: The number of datapoints that must be breaching to trigger the alarm.
+
+Resources: 
+  MyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmActions: 
+        - !Ref TopicArn
+      AlarmName: !Ref AlarmName
+      ComparisonOperator: !Ref ComparisonOperator
+      DatapointsToAlarm: !Ref DatapointsToAlarm
+

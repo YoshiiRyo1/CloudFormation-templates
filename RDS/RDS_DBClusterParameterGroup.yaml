@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create a Autora Cluster Parameter Group.
+Parameters: 
+  TagNameValue:
+    Type: String
+    Description: The Value of Name Tag
+
+  Family:
+    Type: String
+    Description: The database family of this DB cluster parameter group, such as aurora5.6.
+
+Resources: 
+  DBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: ott DB Cluster Parameter Group
+      Family: !Ref Family
+      Parameters:
+        character_set_client: utf8mb4
+        character_set_connection: utf8mb4
+        character_set_database: utf8mb4
+        character_set_results: utf8mb4
+        character_set_server: utf8mb4
+        time_zone: Asia/Tokyo
+      Tags:
+        - 
+          Key: Name
+          Value: !Ref TagNameValue
+
+Outputs:
+  DBClusterParameterGroupID:
+    Description: DB Cluster Parameter Group ID.
+    Value: !Ref DBClusterParameterGroup
+    Export:
+      Name: !Ref TagNameValue
+

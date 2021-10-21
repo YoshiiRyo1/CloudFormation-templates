@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create SecurityGroup for RDS.
+Parameters: 
+  EnvPrefix:
+    Type: String
+    Description: Prefix.
+
+  TagNameValue:
+    Type: String
+    Description: The Value of Name Tag
+
+  VPCID:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC ID that you associate with a EIPs.
+
+  ECSSecurityGroup:
+    Type: String
+    Description: The SecurityGroupID that you associeate with ECS.
+
+  BSSecurityGroup:
+    Type: String
+    Description: The Security Group ID that you associate with Bastion.
+
+Resources: 
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Ref TagNameValue
+      GroupDescription: RDS Aurora Server Group
+      VpcId: !Ref VPCID
+      Tags:
+        - 
+          Key: Name
+          Value: !Ref TagNameValue
+
+  RDSSecurityGroupIngress1:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSecurityGroup
+      IpProtocol: tcp
+      FromPort: '3306'
+      ToPort: '3306'
+      SourceSecurityGroupId: 
+        Fn::ImportValue: !Sub ${ECSSecurityGroup}
+
+  RDSSecurityGroupIngress2:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSecurityGroup
+      IpProtocol: tcp
+      FromPort: '3306'
+      ToPort: '3306'
+      SourceSecurityGroupId: 
+        Fn::ImportValue: !Sub ${BSSecurityGroup}
+
+Outputs:
+  RDSSecurityGroupID:
+    Description: RDS SecurityGroup ID.
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Ref TagNameValue

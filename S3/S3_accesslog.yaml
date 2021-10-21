@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create S3
+Parameters: 
+  TagNameValue:
+    Type: String
+    Description: The Value of Name Tag
+  BucketName:
+    Type: String
+    Description: A name for the bucket.
+  DestinationBucketName:
+    Type: String
+    Description: Settings that define where logs are stored.
+
+Resources: 
+  S3LogBacket:
+    Type: "AWS::S3::Bucket"
+    Properties: 
+      BucketName: !Sub ${BucketName}-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256 
+      LoggingConfiguration:
+        DestinationBucketName: !Ref DestinationBucketName
+        LogFilePrefix: !Sub ${BucketName}-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        -
+          Key: Name
+          Value: !Ref TagNameValue
+      
+Outputs:
+  S3LogBacket: 
+    Description: S3 Backet Name
+    Value: !Ref S3LogBacket
+    Export:
+      Name: !Ref TagNameValue
+

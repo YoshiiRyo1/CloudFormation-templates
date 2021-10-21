@@ -1,0 +1,157 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create ALB
+Parameters: 
+  EnvPrefix:
+    Type: String
+    Description: Prefix.
+  TagNameValue:
+    Type: String
+    Description: The Value of Name Tag
+  ALBLogBacket:
+    Type: String
+    Description: S3 Backet Name that ALB log saved
+  ECSLBSecurityGroup:
+    Type: String
+    Description: Security Group ID that you associate with ECS LB
+  Scheme:
+    Type: String
+    Description: Specifies whether the load balancer is internal or Internet-facing.
+  HealthCheckIntervalSeconds:
+    Type: String
+    Description: The approximate number of seconds between health checks for an individual target.
+  HealthCheckPath:
+    Type: String
+    Description: The ping path destination where Elastic Load Balancing sends health check requests.
+  HealthCheckPort:
+    Type: String
+    Description: The port that the load balancer uses when performing health checks on the targets.
+  HealthCheckProtocol:
+    Type: String
+    Description: The protocol that the load balancer uses when performing health checks on the targets.
+  HealthCheckTimeoutSeconds:
+    Type: String
+    Description: The number of seconds to wait for a response before considering that a health check has failed.
+  HealthyThresholdCount:
+    Type: String
+    Description: The number of consecutive successful health checks that are required before an unhealthy target is considered healthy.
+  Matcher:
+    Type: String
+    Description: The HTTP codes that a healthy target uses when responding to a health check.
+  Port:
+    Type: String
+    Description: The port on which the targets receive traffic.
+  Protocol:
+    Type: String
+    Description: The protocol to use for routing traffic to the targets.
+  TargetType:
+    Type: String
+    Description: The type of targets that you must specify when registering targets with this target group.
+  UnhealthyThresholdCount:
+    Type: String
+    Description: The number of consecutive failed health checks that are required before a target is considered unhealthy.
+  ListenerPort:
+    Type: String
+    Description: The port on which the targets receive traffic.
+  ListenerProtocol:
+    Type: String
+    Description: The protocol to use for routing traffic to the targets.
+  CertificateArn:
+    Type: String
+    Description: The default SSL server certificate for the listener.
+  KDKWbldgHTTPSSecurityGroup:
+    Type: String
+    Description: Security Group ID that you associate with ECS LB
+
+Resources: 
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref TargetGroup1
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: !Ref ListenerPort
+      Protocol: !Ref ListenerProtocol
+      Certificates:
+        -
+          CertificateArn: !Ref CertificateArn
+      SslPolicy: "ELBSecurityPolicy-TLS-1-2-2017-01"
+
+  TargetGroup1:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: !Ref HealthCheckIntervalSeconds
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckPort: !Ref HealthCheckPort
+      HealthCheckProtocol: !Ref HealthCheckProtocol
+      HealthCheckTimeoutSeconds: !Ref HealthCheckTimeoutSeconds
+      HealthyThresholdCount: !Ref HealthyThresholdCount
+      Matcher: 
+        HttpCode: !Ref Matcher
+      Name: !Sub ${TagNameValue}-1
+      Port: !Ref Port
+      Protocol: !Ref Protocol
+      TargetType: !Ref TargetType
+      UnhealthyThresholdCount: !Ref UnhealthyThresholdCount
+      VpcId:
+        Fn::ImportValue: !Sub ${EnvPrefix}-VPC
+
+  TargetGroup2:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: !Ref HealthCheckIntervalSeconds
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckPort: !Ref HealthCheckPort
+      HealthCheckProtocol: !Ref HealthCheckProtocol
+      HealthCheckTimeoutSeconds: !Ref HealthCheckTimeoutSeconds
+      HealthyThresholdCount: !Ref HealthyThresholdCount
+      Matcher: 
+        HttpCode: !Ref Matcher
+      Name: !Sub ${TagNameValue}-2
+      Port: !Ref Port
+      Protocol: !Ref Protocol
+      TargetType: !Ref TargetType
+      UnhealthyThresholdCount: !Ref UnhealthyThresholdCount
+      VpcId:
+        Fn::ImportValue: !Sub ${EnvPrefix}-VPC
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Ref TagNameValue
+      LoadBalancerAttributes: 
+        - Key: deletion_protection.enabled
+          Value: True
+        - Key: access_logs.s3.enabled
+          Value: True
+        - Key: access_logs.s3.bucket
+          Value: !Ref ALBLogBacket
+        - Key: access_logs.s3.prefix
+          Value: !Ref TagNameValue
+      Scheme: !Ref Scheme
+      SecurityGroups: 
+       - 
+         Fn::ImportValue: !Sub ${ECSLBSecurityGroup}
+       - 
+         Fn::ImportValue: !Sub ${KDKWbldgHTTPSSecurityGroup}
+      Subnets:
+       - 
+         Fn::ImportValue: !Sub ${EnvPrefix}-LBSubnet1
+       - 
+         Fn::ImportValue: !Sub ${EnvPrefix}-LBSubnet2
+      Type: application
+
+Outputs:
+  URL: 
+    Description: URL of the website
+    Value: !Join [ "", [ "http://", !GetAtt LoadBalancer.DNSName  ] ]
+  TargetGroupArn:
+    Description: Target Group Arn
+    Value: !Ref TargetGroup1
+    Export:
+      Name: !Join [ "-", [ !Ref TagNameValue, "TargetGroupArn" ] ]
+  LoadBalancerArn:
+    Description: LoadBalancer Arn
+    Value: !Ref LoadBalancer
+    Export:
+      Name: !Join [ "-", [ !Ref TagNameValue, "LBArn" ] ]

@@ -1,0 +1,442 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: VPC Network Template
+Parameters:
+  NameTagPrefix:
+    Type: String
+    Description: Prefix of Name tags.
+  VPCCIDR:
+    Description: First and Second Octet of VPC, For example xxx.xxx
+    Type: String
+    Default: "10.1"
+    AllowedPattern: "^(10\\.([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])|172\\.(1[6-9]|2[0-9]|3[0-1])|192\\.168)$"
+    ConstraintDescription: xxx.xxx
+Mappings:
+  StackConfig:
+    VPC:
+      CIDR: ".0.0/16"
+    LBSubnet1:
+      CIDR: ".0.0/24"
+    LBSubnet2:
+      CIDR: ".1.0/24"
+    AppSubnet1:
+      CIDR: ".2.0/24"
+    AppSubnet2:
+      CIDR: ".3.0/24"
+    DBSubnet1:
+      CIDR: ".4.0/24"
+    DBSubnet2:
+      CIDR: ".5.0/24"
+    Managesubnet1:
+      CIDR: ".6.0/24"
+    Managesubnet2:
+      CIDR: ".7.0/24"
+    NatGateWaysubnet1:
+      CIDR: ".8.0/24"
+    NatGateWaysubnet2:
+      CIDR: ".9.0/24"
+    Serverlesssubnet1:
+      CIDR: ".10.0/24"
+    Serverlesssubnet2:
+      CIDR: ".11.0/24"
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, VPC, CIDR]}]
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-IGW
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: AttachGateway
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-public-RouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  EIP1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - EIP1
+        - AllocationId
+      SubnetId: !Ref AppSubnet1
+      Tags:
+        - Key: Name
+          Value: !Join [ "-", [ !Ref NameTagPrefix, natgw1 ] ]
+
+  NatgwRouteTable1:
+    Type: AWS::EC2::RouteTable
+    DependsOn: AttachGateway
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-natgw1-RouteTable
+
+  NatgwRoute1:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref NatgwRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  EIP2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - EIP2
+        - AllocationId
+      SubnetId: !Ref AppSubnet2
+      Tags:
+        - Key: Name
+          Value: !Join [ "-", [ !Ref NameTagPrefix, natgw2 ] ]
+
+  NatgwRouteTable2:
+    Type: AWS::EC2::RouteTable
+    DependsOn: AttachGateway
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-natgw2-RouteTable
+
+  NatgwRoute2:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref NatgwRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  LBSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [0, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, LBSubnet1, CIDR]}]
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-LBSubnet1
+      VpcId: !Ref VPC
+
+  LBSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref LBSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  LBSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [1, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, LBSubnet2, CIDR]}]    
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-LBSubnet2
+      VpcId: !Ref VPC
+
+  LBSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref LBSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  AppSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [0, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, AppSubnet1, CIDR]}]
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-AppSubnet1
+      VpcId: !Ref VPC
+
+  AppSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  AppSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [1, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, AppSubnet2, CIDR]}]
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-AppSubnet2
+      VpcId: !Ref VPC
+
+  AppSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  Managesubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [0, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, Managesubnet1, CIDR]}]
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-Managesubnet1
+      VpcId: !Ref VPC
+
+  Managesubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Managesubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  Managesubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [1, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, Managesubnet2, CIDR]}]
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-Managesubnet2
+      VpcId: !Ref VPC
+
+  Managesubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Managesubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  NatGateWaysubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [1, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, NatGateWaysubnet1, CIDR]}]
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-subnet-natgw-1
+      VpcId: !Ref VPC
+
+  NatGate1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref NatGateWaysubnet1
+      RouteTableId: !Ref NatgwRouteTable1
+
+  NatGateWaysubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [1, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, NatGateWaysubnet2, CIDR]}]
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-subnet-natgw-2
+      VpcId: !Ref VPC
+
+  NatGate2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref NatGateWaysubnet2
+      RouteTableId: !Ref NatgwRouteTable2
+
+  DBSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [0, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, DBSubnet1, CIDR]}]
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-DBSubnet1
+      VpcId: !Ref VPC
+
+  DBSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [1, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, DBSubnet2, CIDR]}]
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-DBSubnet2
+      VpcId: !Ref VPC
+
+  Serverlesssubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [0, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, Serverlesssubnet1, CIDR]}]
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-Serverlesssubnet1
+      VpcId: !Ref VPC
+
+  Serverlesssubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone: !Select [1, "Fn::GetAZs": { Ref: "AWS::Region" }]
+      CidrBlock: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, Serverlesssubnet2, CIDR]}]
+      Tags:
+        - Key: Name
+          Value: !Sub ${NameTagPrefix}-Serverlesssubnet2
+      VpcId: !Ref VPC
+
+Outputs:
+  VPC:
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${NameTagPrefix}-VPC
+  LBSubnet1:
+    Value: !Ref LBSubnet1
+    Export:
+      Name: !Sub ${NameTagPrefix}-LBSubnet1
+  LBSubnet2:
+    Value: !Ref LBSubnet2
+    Export:
+      Name: !Sub ${NameTagPrefix}-LBSubnet2
+  AppSubnet1:
+    Value: !Ref AppSubnet1
+    Export:
+      Name: !Sub ${NameTagPrefix}-AppSubnet1
+  AppSubnet2:
+    Value: !Ref AppSubnet2
+    Export:
+      Name: !Sub ${NameTagPrefix}-AppSubnet2
+  Managesubnet1:
+    Value: !Ref Managesubnet1
+    Export:
+      Name: !Sub ${NameTagPrefix}-Managesubnet1
+  Managesubnet2:
+    Value: !Ref Managesubnet2
+    Export:
+      Name: !Sub ${NameTagPrefix}-Managesubnet2
+  DBSubnet1:
+    Value: !Ref DBSubnet1
+    Export:
+      Name: !Sub ${NameTagPrefix}-DBSubnet1
+  DBSubnet2:
+    Value: !Ref DBSubnet2
+    Export:
+      Name: !Sub ${NameTagPrefix}-DBSubnet2
+  Serverlesssubnet1:
+    Value: !Ref Serverlesssubnet1
+    Export:
+      Name: !Sub ${NameTagPrefix}-Serverlesssubnet1
+  Serverlesssubnet2:
+    Value: !Ref Serverlesssubnet2
+    Export:
+      Name: !Sub ${NameTagPrefix}-Serverlesssubnet2
+  NatGateWaysubnet1:
+    Value: !Ref NatGateWaysubnet1
+    Export:
+      Name: !Sub ${NameTagPrefix}-NatGateWaysubnet1
+  NatGateWaysubnet2:
+    Value: !Ref NatGateWaysubnet2
+    Export:
+      Name: !Sub ${NameTagPrefix}-NatGateWaysubnet2
+  PublicRouteTable:
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub ${NameTagPrefix}-PublicRouteTable
+  LBSubnetCidr1:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, LBSubnet1, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-LBSubnetCidr1
+  LBSubnetCidr2:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, LBSubnet2, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-LBSubnetCidr2
+  AppSubnetCidr1:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, AppSubnet1, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-AppSubnetCidr1
+  AppSubnetCidr2:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, AppSubnet2, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-AppSubnetCidr2
+  DBSubnetCidr1:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, DBSubnet1, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-DBSubnetCidr1
+  DBSubnetCidr2:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, DBSubnet2, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-DBSubnetCidr2
+  ManagesubnetCidr1:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, Managesubnet1, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-ManagesubnetCidr1
+  ManagesubnetCidr2:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, Managesubnet2, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-ManagesubnetCidr2
+  NatGateWaysubnetCidr1:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, NatGateWaysubnet1, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-NatGateWaysubnetCidr1
+  NatGateWaysubnetCidr2:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, NatGateWaysubnet2, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-NatGateWaysubnetCidr2
+  ServerlesssubnetCidr1:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, Serverlesssubnet1, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-ServerlesssubnetCidr1
+  ServerlesssubnetCidr2:
+    Value: !Sub ['${VPCCIDR}${Param1}', {Param1: !FindInMap [StackConfig, Serverlesssubnet2, CIDR]}]
+    Export:
+      Name: !Sub ${NameTagPrefix}-ServerlesssubnetCidr2
+

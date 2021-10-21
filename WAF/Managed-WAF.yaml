@@ -1,0 +1,263 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: WAF v2 Web ACL
+
+Parameters: 
+  WebACLName:
+    Description: The Name of WebACL.
+    Type: String
+
+  BucketName:
+    Type: String
+    Description: The name for the bucket.
+    Default: waf-logs
+
+Resources: 
+### Waf logs bucket
+  S3Backet:
+    Type: "AWS::S3::Bucket"
+    Properties: 
+      BucketName: !Sub ${BucketName}-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256 
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+### Firehose
+  DeliveryStream:
+    Type: "AWS::KinesisFirehose::DeliveryStream"
+    Properties:
+      DeliveryStreamName: !Sub aws-waf-logs-${AWS::Region}-${WebACLName}
+      DeliveryStreamType: DirectPut
+      S3DestinationConfiguration:
+        BucketARN: !GetAtt S3Backet.Arn
+        BufferingHints:
+          IntervalInSeconds: 300
+          SizeInMBs: 5
+        CompressionFormat: GZIP
+        RoleARN: !GetAtt FirehoseRole.Arn
+
+### IAM Role for firehose
+  FirehoseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: '/'
+      AssumeRolePolicyDocument: 
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - firehose.amazonaws.com
+            Action:
+              - sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Sub ${AWS::AccountId}
+      Policies:
+        - 
+         PolicyName: firehose_delivery_role
+         PolicyDocument:
+           Version: "2012-10-17"
+           Statement:
+              - 
+                Effect: "Allow"
+                Action: 
+                  - glue:GetTable
+                  - glue:GetTableVersion
+                  - glue:GetTableVersions
+                Resource: "*"
+              -
+                Effect: "Allow"
+                Action: 
+                  - s3:AbortMultipartUpload
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:PutObject
+                Resource:
+                  - !Sub arn:aws:s3:::${BucketName}-${AWS::AccountId}
+                  - !Sub arn:aws:s3:::${BucketName}-${AWS::AccountId}/*
+                  - arn:aws:s3:::%FIREHOSE_BUCKET_NAME%
+                  - arn:aws:s3:::%FIREHOSE_BUCKET_NAME%/*
+              -
+                Effect: "Allow"
+                Action: 
+                  - lambda:InvokeFunction
+                  - lambda:GetFunctionConfiguration
+                Resource:
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:%FIREHOSE_DEFAULT_FUNCTION%:%FIREHOSE_DEFAULT_VERSION%
+              -
+                Effect: "Allow"
+                Action: 
+                  - kms:GenerateDataKey
+                  - kms:Decrypt
+                Resource:
+                  - !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/s3
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub s3.${AWS::Region}.amazonaws.com
+                  StringLike:
+                    kms:EncryptionContext:aws:s3:arn:
+                      - !Sub arn:aws:s3:::${BucketName}-${AWS::AccountId}/*
+                      - !Sub arn:aws:s3:::${BucketName}-${AWS::AccountId}/%FIREHOSE_BUCKET_PREFIX%*
+              -
+                Effect: "Allow"
+                Action: 
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/kinesisfirehose/aws-waf-logs-${AWS::Region}-${WebACLName}:log-stream:*
+              -
+                Effect: "Allow"
+                Action: 
+                  - kinesis:DescribeStream
+                  - kinesis:GetShardIterator
+                  - kinesis:GetRecords
+                Resource:
+                  - !Sub arn:aws:kinesis:${AWS::Region}:${AWS::AccountId}:stream/%FIREHOSE_STREAM_NAME%
+              -
+                Effect: "Allow"
+                Action: 
+                  - kms:Decrypt
+                Resource:
+                  - !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/%SSE_KEY_ID%
+                Condition:
+                  StringEquals:
+                    kms:ViaService: kinesis.%REGION_NAME%.amazonaws.com
+                  StringLike:
+                    kms:EncryptionContext:aws:kinesis:arn: !Sub arn:aws:kinesis:%REGION_NAME%:${AWS::AccountId}:stream/%FIREHOSE_STREAM_NAME%
+
+### WAF WebACL
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Ref WebACLName
+      DefaultAction: 
+        Allow: {}
+      Scope: REGIONAL
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: !Ref WebACLName
+        SampledRequestsEnabled: false
+      Rules:
+        - 
+          Name: AWS-AWSManagedRulesAmazonIpReputationList
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesAmazonIpReputationList
+            SampledRequestsEnabled: false
+        - 
+          Name: AWS-AWSManagedRulesCommonRuleSet
+          Priority: 2
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesCommonRuleSet
+            SampledRequestsEnabled: false
+        - 
+          Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 3
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesKnownBadInputsRuleSet
+            SampledRequestsEnabled: false
+        - 
+          Name: AWS-AWSManagedRulesLinuxRuleSet
+          Priority: 4
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesLinuxRuleSet
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesLinuxRuleSet
+            SampledRequestsEnabled: false
+        - 
+          Name: AWS-AWSManagedRulesUnixRuleSet
+          Priority: 5
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesUnixRuleSet
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesUnixRuleSet
+            SampledRequestsEnabled: false
+        - 
+          Action: 
+            Count: {}
+          Name: Custom-IPaddress-BlackList
+          Priority: 0
+          Statement:
+            IPSetReferenceStatement:
+              Arn: !GetAtt IPBlackList.Arn
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: Custom-IPaddress-BlackList
+            SampledRequestsEnabled: false
+        -
+          Action: 
+            Count: {}
+          Name: Custom-Ratebased
+          Priority: 6
+          Statement:
+            RateBasedStatement:
+              AggregateKeyType: IP
+              Limit: 100
+              ScopeDownStatement:
+                NotStatement:
+                  Statement:
+                    IPSetReferenceStatement:
+                      Arn: !GetAtt IPWhiteList.Arn
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: Custom-Ratebased
+            SampledRequestsEnabled: false
+
+
+  IPWhiteList:
+    Type: "AWS::WAFv2::IPSet"
+    Properties:
+      Name: Custom-ipaddress-whitelist
+      Scope: REGIONAL
+      IPAddressVersion: IPV4
+      Addresses:
+        - 10.0.0.1/32 
+
+  IPBlackList:
+    Type: "AWS::WAFv2::IPSet"
+    Properties:
+      Name: Custom-ipaddress-blacklist
+      Scope: REGIONAL
+      IPAddressVersion: IPV4
+      Addresses:
+        - 127.0.0.1/32 
+
+

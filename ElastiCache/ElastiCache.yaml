@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create ElastiCache Cluster.
+Parameters: 
+  TagNameValue:
+    Type: String
+    Description: The Value of Name Tag
+
+  ClusterNodeType:
+    Description: ElastiCache Cluster Node type
+    Type: String
+    Default: cache.m3.medium
+    AllowedValues:
+      - cache.t2.micro
+      - cache.t2.small
+      - cache.t2.medium
+      - cache.m3.medium
+      - cache.m3.large
+      - cache.m3.xlarge
+      - cache.m3.2xlarge
+      - cache.m4.large
+      - cache.m4.xlarge
+      - cache.m4.2xlarge
+      - cache.m4.4xlarge
+      - cache.m4.10xlarge
+      - cache.m5.large
+      - cache.m5.xlarge
+      - cache.m5.2xlarge
+      - cache.m5.4xlarge
+      - cache.r3.large
+      - cache.r3.xlarge
+      - cache.r3.2xlarge
+      - cache.r3.4xlarge
+      - cache.r3.8xlarge
+      - cache.r4.large
+      - cache.r4.xlarge
+      - cache.r4.2xlarge
+      - cache.r4.4xlarge
+      - cache.r4.8xlarge
+      - cache.r4.16xlarge
+    ConstraintDescription: must be a valid ElastiCache Node type.
+
+  EngineVersion:
+    Type: String
+    Description: The version of the cache engine to be used for this cluster.
+    Default: 5.0.4
+    AllowedValues:
+      - 5.0.4
+      - 5.0.0
+      - 4.0.10
+      - 3.2.10
+      - 3.2.6
+      - 3.2.4
+      - 2.8.24
+      - 2.8.23
+      - 2.8.22
+
+  PreferredMaintenanceWindow:
+    Type: String
+    Description: The weekly time range during which system maintenance can occur.
+    Default: Sat:18:00-Sat:19:00
+
+  ReplicasPerNodeGroup:
+    Type: String
+    Description: The number of replica nodes in each node group (shard).
+    Default: 1
+
+  SecurityGroupIds:
+    Type: String
+    Description: A list of Amazon Virtual Private Cloud (Amazon VPC) security groups to associate with this replication group.
+
+  SnapshotRetentionLimit:
+    Type: String
+    Description: The number of days that ElastiCache retains automatic snapshots before deleting them.
+    Default: 7
+
+  SnapshotWindow:
+    Type: String
+    Description: The time range (in UTC) when ElastiCache takes a daily snapshot of the node group that you specified in the SnapshottingClusterId property.
+    Default: 17:00-18:00
+
+  CacheParameterGroupFamily:
+    Type: String
+    Description: The name of the cache parameter group family that the cache parameter group can be used with.
+    Default: redis5.0
+
+  DBSubnet1:
+    Type: String
+    Description: The Subent ID.
+
+  DBSubnet2:
+    Type: String
+    Description: The Subent ID.
+
+Resources: 
+  RedisCluster:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      AutomaticFailoverEnabled: True
+      CacheNodeType: !Ref ClusterNodeType
+      CacheParameterGroupName: !Ref RedisParameterGroup
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      Engine: Redis
+      EngineVersion: !Ref EngineVersion
+      NodeGroupConfiguration:
+        -
+          PrimaryAvailabilityZone: ap-northeast-1a
+          ReplicaAvailabilityZones: 
+          - 
+            ap-northeast-1c
+      NumNodeGroups: 1
+      PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+      ReplicasPerNodeGroup: !Ref ReplicasPerNodeGroup
+      ReplicationGroupDescription: !Ref TagNameValue
+      SecurityGroupIds :
+        - Fn::ImportValue: !Sub ${SecurityGroupIds}
+      SnapshotRetentionLimit: !Ref SnapshotRetentionLimit
+      SnapshotWindow: !Ref SnapshotWindow
+      Tags:
+        -
+          Key: Name
+          Value: !Ref TagNameValue
+
+  RedisSubnetGroup:
+    Type: "AWS::ElastiCache::SubnetGroup"
+    Properties:
+      CacheSubnetGroupName: !Join [ "-", [ !Ref TagNameValue, subnetgroup ] ]
+      Description: Cache Subnet Group for Redis
+      SubnetIds:
+        - !Ref DBSubnet1
+        - !Ref DBSubnet2
+
+  RedisParameterGroup:
+    Type: AWS::ElastiCache::ParameterGroup
+    Properties:
+      CacheParameterGroupFamily: !Ref CacheParameterGroupFamily
+      Description: !Ref TagNameValue
+      Properties:
+        cluster-enabled: "yes"
+
+Outputs:
+  ClusterlogicalID:
+    Description: logical ID.
+    Value: !Ref RedisCluster
+ 

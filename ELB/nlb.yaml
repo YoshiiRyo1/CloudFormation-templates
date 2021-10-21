@@ -1,0 +1,130 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: "Proxy Template"
+
+Parameters:
+  NameTagPrefix:
+    Type: String
+    Description: Prefix of Name tags.
+
+  NLBName:
+    Type: String
+    Description: "NLB Name"
+
+  LogBucketName:
+    Type: String
+    Description: "NLB Log Bucket Name"
+
+Resources:
+  NLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: false
+        - Key: access_logs.s3.enabled
+          Value: True
+        - Key: access_logs.s3.bucket
+          Value: !Ref NLBLogBacket
+        - Key: access_logs.s3.prefix
+          Value: !Ref NLBName
+        - Key: load_balancing.cross_zone.enabled
+          Value: true
+      Name: !Ref NLBName
+      Scheme: internal
+      Subnets:
+        - Fn::ImportValue: !Sub ${NameTagPrefix}-LBSubnet1
+        - Fn::ImportValue: !Sub ${NameTagPrefix}-LBSubnet2
+        - Fn::ImportValue: !Sub ${NameTagPrefix}-LBSubnet3
+      Tags:
+        - Key: Name
+          Value: !Ref NLBName
+      Type: "network"
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup1
+      LoadBalancerArn: !Ref NLB
+      Port: 8080
+      Protocol: "TCP"
+
+  TargetGroup1:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${NLBName}-1
+      Port: 3128
+      Protocol: "TCP"
+      TargetType: ip
+      VpcId:
+        Fn::ImportValue: !Sub ${NameTagPrefix}-VPC
+
+  NLBLogBacket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub ${LogBucketName}-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls:  True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      Tags:
+        - Key: Name
+          Value: !Ref LogBucketName
+
+  NLBLogBacketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref NLBLogBacket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 's3:PutObject'
+            Effect: Allow
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref NLBLogBacket
+                - /*
+            Principal:
+              AWS: "arn:aws:iam::582318560864:root"
+          - Action:
+              - 's3:PutObject'
+            Effect: Allow
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref NLBLogBacket
+                - /*
+            Principal:
+              Service: "delivery.logs.amazonaws.com"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: "bucket-owner-full-control"
+          - Action:
+              - 's3:GetBucketAcl'
+            Effect: Allow
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref NLBLogBacket
+            Principal:
+              Service: "delivery.logs.amazonaws.com"
+
+Outputs:
+  TargetGroup1:
+    Value: !Ref TargetGroup1
+    Export:
+      Name: !Sub ${NameTagPrefix}-TargetGroup1Arn
+
+  NLB:
+    Value: !Ref NLB
+    Export:
+      Name: !Sub ${NameTagPrefix}-NLBArn

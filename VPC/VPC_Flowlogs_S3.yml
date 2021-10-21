@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: VPCFlowLogs Settings (Destination to S3)
+
+Parameters:
+  TagNameValue:
+    Type: String
+    Description: The Value of Name Tag
+  BucketName:
+    Type: String
+    Description: A name for the bucket.
+  Filter:
+    Type: String
+    Default: ALL
+    AllowedValues: [ALL, ACCEPT, REJECT]
+Resources:
+  FlowLogsBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Ref BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256 
+      Tags:
+        -
+          Key: Name
+          Value: !Ref TagNameValue
+  VPCFlowLogs:
+    Type: "AWS::EC2::FlowLog"
+    DependsOn: FlowLogsBucket
+    Properties:
+      LogDestination: !Sub "arn:aws:s3:::${FlowLogsBucket}"
+      LogDestinationType: s3
+      ResourceId: Fn::ImportValue: !Sub ${NameTagPrefix}-VPC
+      ResourceType: VPC
+      TrafficType: !Ref Filter
+Outputs:
+  FlowLogsBucket:
+    Description: S3 Backet Name
+    Value: !Ref FlowLogsBucket
+    Export:
+      Name: !Ref TagNameValue
