@@ -1,0 +1,102 @@
+---
+Description: "Basic Budget"
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Parameters:
+          - EmailAddress
+          - Amount
+      - Parameters:
+          - UseBlended
+      - Parameters:
+          - Forecasted
+          - Actual1
+          - Actual2
+          - Actual3
+
+Parameters:
+  Amount:
+    Type: String
+    Default: 100
+    Description: Budgeted amount
+
+  EmailAddress:
+    Type: String
+    Description: Notification email address
+
+  Forecasted:
+    Type: Number
+    Default: 100
+    MinValue: 1
+    MaxValue: 100
+    Description: "% of budgeted amount (Forecasted Costs)"
+
+  Actual1:
+    Type: Number
+    Default: 50
+    MinValue: 1
+    MaxValue: 100
+    Description: "% of budgeted amount (Actual Costs)"
+
+  Actual2:
+    Type: Number
+    Default: 75
+    MinValue: 1
+    MaxValue: 100
+    Description: "% of budgeted amount (Actual Costs)"
+
+  Actual3:
+    Type: Number
+    Default: 100
+    MinValue: 1
+    MaxValue: 100
+    Description: "% of budgeted amount (Actual Costs)"
+
+  UseBlended:
+    Type: String
+    Default: true
+    AllowedValues: [true, false]
+    Description: Budgeted amount
+
+Resources:
+  Budget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        # BudgetName: String
+        BudgetLimit:
+          Amount: !Ref Amount
+          Unit: USD
+        TimeUnit: MONTHLY
+        CostTypes:
+          UseBlended: !Ref UseBlended
+        BudgetType: COST
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: !Ref Forecasted
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref EmailAddress
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: !Ref Actual1
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref EmailAddress
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: !Ref Actual2
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref EmailAddress
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: !Ref Actual3
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref EmailAddress

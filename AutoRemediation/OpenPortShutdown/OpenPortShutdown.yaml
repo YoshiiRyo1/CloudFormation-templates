@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Config Rules Auto Remediation Opened Securitygroup"
+
+Resources:
+  ### Role for Automation
+  IAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      RoleName: "ssm-automation-role-openportshutdown"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "ssm.amazonaws.com"
+            Action: "sts:AssumeRole"
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - !Ref IAMManagedPolicy
+
+  ### Policy
+  IAMManagedPolicy:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      ManagedPolicyName: "ssm-automation-policy-openportshutdown"
+      Path: "/"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: "ec2:RevokeSecurityGroupIngress"
+            Resource: "*"
+            Effect: "Allow"
+
+  ## Config Rules DisablePublicAccessForSecurityGroup
+  RestictedSSH:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: "restricted-ssh"
+      Scope:
+        ComplianceResourceTypes:
+          - "AWS::EC2::SecurityGroup"
+      Source:
+        Owner: AWS
+        SourceIdentifier: "INCOMING_SSH_DISABLED"
+
+  DisablePublicAccessForSecurityGroup:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      Automatic: true
+      ConfigRuleName: !Ref RestictedSSH
+      MaximumAutomaticAttempts: 1
+      RetryAttemptSeconds: 1
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values:
+              - !GetAtt IAMRole.Arn
+        GroupId:
+          ResourceValue:
+            Value: "RESOURCE_ID"
+      TargetId: "AWS-DisablePublicAccessForSecurityGroup"
+      TargetType: "SSM_DOCUMENT"
+
+  ## Config Rules DisablePublicAccessForRDP
+  RestictedRDP:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: "restricted-rdp"
+      Scope:
+        ComplianceResourceTypes:
+          - "AWS::EC2::SecurityGroup"
+      Source:
+        Owner: AWS
+        SourceIdentifier: "RESTRICTED_INCOMING_TRAFFIC"
+      InputParameters: |
+        {
+          "blockedPort1": "3389"
+        }
+
+  DisablePublicAccessForRDP:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      Automatic: true
+      ConfigRuleName: !Ref RestictedRDP
+      MaximumAutomaticAttempts: 1
+      RetryAttemptSeconds: 1
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values:
+              - !GetAtt IAMRole.Arn
+        GroupId:
+          ResourceValue:
+            Value: "RESOURCE_ID"
+      TargetId: "AWS-DisablePublicAccessForSecurityGroup"
+      TargetType: "SSM_DOCUMENT"

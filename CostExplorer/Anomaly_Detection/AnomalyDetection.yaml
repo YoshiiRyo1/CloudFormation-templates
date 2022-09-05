@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CostExplorer Anomaly Detection"
+
+Parameters:
+  emailaddress:
+    Type: String
+    Description: "EMAIL Address to notify"
+
+  Threshold:
+    Type: Number
+    Description: "The dollar value that triggers a notification if the threshold is exceeded."
+    Default: 1000
+
+Resources:
+  AnomalyServiceMonitor:
+    Type: "AWS::CE::AnomalyMonitor"
+    Properties:
+      MonitorDimension: "SERVICE"
+      MonitorName: "Anomaly Detection by weekly cost"
+      MonitorType: "DIMENSIONAL"
+
+  AnomalySubscription:
+    Type: "AWS::CE::AnomalySubscription"
+    Properties:
+      Frequency: "WEEKLY"
+      MonitorArnList:
+        - !Ref AnomalyServiceMonitor
+      Subscribers:
+        - Type: "EMAIL"
+          Address: !Ref emailaddress
+      SubscriptionName: "AnomalyDetectionByWeekCost"
+      Threshold: !Ref Threshold

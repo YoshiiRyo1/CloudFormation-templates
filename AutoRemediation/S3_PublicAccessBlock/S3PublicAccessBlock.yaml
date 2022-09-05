@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Checks whether the required public access block settings are configured from account level."
+
+Resources:
+  ### Role for Automation
+  IAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      RoleName: "ssm-automation-role-s3publicblock"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "ssm.amazonaws.com"
+            Action: "sts:AssumeRole"
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - !Ref IAMManagedPolicy
+
+  ### Policy
+  IAMManagedPolicy:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      ManagedPolicyName: "ssm-autumation-policy-s3publicblock"
+      Path: "/"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "s3:GetBucketPolicyStatus"
+              - "s3:GetBucketPublicAccessBlock"
+              - "s3:PutBucketPublicAccessBlock"
+              - "s3:GetAccountPublicAccessBlock"
+              - "s3:PutAccountPublicAccessBlock"
+              - "s3:PutAccessPointPublicAccessBlock"
+            Resource: "*"
+            Effect: "Allow"
+
+  ## Config Rules s3-account-level-public-access-blocks-periodic
+  S3PubclicAccessBlock:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: "s3-account-level-public-access-blocks-periodic"
+      Scope:
+        ComplianceResourceTypes:
+          - "AWS::S3::AccountPublicAccessBlock"
+      Source:
+        Owner: AWS
+        SourceIdentifier: "S3_ACCOUNT_LEVEL_PUBLIC_ACCESS_BLOCKS_PERIODIC"
+      InputParameters:
+        IgnorePublicAcls: "True"
+        BlockPublicPolicy: "True"
+        BlockPublicAcls: "True"
+        RestrictPublicBuckets: "True"
+      MaximumExecutionFrequency: "TwentyFour_Hours"
+
+  DisableS3PubclicAccessBlock:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      Automatic: true
+      ConfigRuleName: !Ref S3PubclicAccessBlock
+      MaximumAutomaticAttempts: 1
+      RetryAttemptSeconds: 1
+      Parameters:
+        AccountId:
+          StaticValue:
+            Values:
+              - !Ref AWS::AccountId
+        RestrictPublicBuckets:
+          StaticValue:
+            Values:
+              - "true"
+        BlockPublicAcls:
+          StaticValue:
+            Values:
+              - "true"
+        IgnorePublicAcls:
+          StaticValue:
+            Values:
+              - "true"
+        BlockPublicPolicy:
+          StaticValue:
+            Values:
+              - "true"
+        AutomationAssumeRole:
+          StaticValue:
+            Values:
+              - !GetAtt IAMRole.Arn
+      TargetId: "AWSConfigRemediation-ConfigureS3PublicAccessBlock"
+      TargetType: "SSM_DOCUMENT"

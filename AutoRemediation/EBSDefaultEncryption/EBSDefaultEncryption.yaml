@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Config Rules Auto Remediation EBS Encryption"
+
+Resources:
+  ### Role for Automation
+  IAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      RoleName: "ssm-automation-role-ebsencryption"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "ssm.amazonaws.com"
+            Action: "sts:AssumeRole"
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - !Ref IAMManagedPolicy
+
+  ### Policy
+  IAMManagedPolicy:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      ManagedPolicyName: "ssm-automation-policy-ebsencryption"
+      Path: "/"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "ec2:ModifyEbsDefaultKmsKeyId"
+              - "ec2:ResetEbsDefaultKmsKeyId"
+            Resource: "*"
+            Effect: "Allow"
+
+  ## Config Rules ec2-ebs-encryption-by-default
+  EC2EBSEncryptionByDefault:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: "ec2-ebs-encryption-by-default"
+      Source:
+        Owner: AWS
+        SourceIdentifier: "EC2_EBS_ENCRYPTION_BY_DEFAULT"
+
+  EnableEbsEncryptionByDefault:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      Automatic: true
+      ConfigRuleName: !Ref EC2EBSEncryptionByDefault
+      MaximumAutomaticAttempts: 1
+      RetryAttemptSeconds: 1
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values:
+              - !GetAtt IAMRole.Arn
+      TargetId: "AWSConfigRemediation-EnableEbsEncryptionByDefault"
+      TargetType: "SSM_DOCUMENT"
