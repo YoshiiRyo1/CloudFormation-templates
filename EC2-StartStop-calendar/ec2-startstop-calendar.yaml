@@ -1,0 +1,290 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: EC2 Start Stop with Calendar
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: You must input by yourself
+        Parameters:
+          - ChangeCalendarARN
+          - CronExpressionStart
+          - CronExpressionStop
+      - Label:
+          default: Others
+        Parameters:
+          - IAMRoleName
+          - ResourceGroupName
+          - EC2TagKey
+          - EC2TagValue
+          - DocumentNameStart
+          - DocumentNameStop
+
+Parameters:
+  IAMRoleName:
+    Type: String
+    Description: IAM Role Name
+    Default: "CustomEC2StartStopCalendarRole"
+  DocumentNameStart:
+    Type: String
+    Description: "SSM Document Name"
+    Default: "ec2-start-with-calendar"
+  DocumentNameStop:
+    Type: String
+    Description: "SSM Document Name"
+    Default: "ec2-stop-with-calendar"
+  ChangeCalendarARN:
+    Type: String
+    Description: "The Systems Manager Change Calendar ARN"
+  CronExpressionStart:
+    Type: String
+    Description: "The schedule of the maintenance window in the form of a cron (JST)"
+    Default: "cron(0 9 * * ? *)"
+  CronExpressionStop:
+    Type: String
+    Description: "The schedule of the maintenance window in the form of a cron (JST)"
+    Default: "cron(0 18 * * ? *)"
+  ResourceGroupName:
+    Type: String
+    Description: "The name of a resource group."
+    Default: "EC2-StartStop-Calendar-Group"
+  EC2TagKey:
+    Type: String
+    Description: "A string that defines a tag key."
+    Default: "EC2Calendar"
+  EC2TagValue:
+    Type: String
+    Description: "true."
+    Default: "true"
+
+Resources:
+  ## IAM Role for SSM
+  IAMROLE:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref IAMRoleName
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ssm.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "Inline${IAMRoleName}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:CancelCommand"
+                  - "ssm:GetCommandInvocation"
+                  - "ssm:ListCommandInvocations"
+                  - "ssm:ListCommands"
+                  - "ssm:SendCommand"
+                  - "ssm:GetAutomationExecution"
+                  - "ssm:GetParameters"
+                  - "ssm:StartAutomationExecution"
+                  - "ssm:StopAutomationExecution"
+                  - "ssm:ListTagsForResource"
+                  - "ssm:GetCalendarState"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "ec2:DescribeInstanceAttribute"
+                  - "ec2:DescribeInstanceStatus"
+                  - "ec2:DescribeInstances"
+                  - "ec2:StartInstances"
+                  - "ec2:StopInstances"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "resource-groups:ListGroups"
+                  - "resource-groups:ListGroupResources"
+                  - "resource-groups:GetGroupQuery"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "tag:GetResources"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "iam:PassRole"
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    iam:PassedToService:
+                      - ssm.amazonaws.com
+
+  ## SSM Documents
+  DocumentStart:
+    Type: AWS::SSM::Document
+    Properties:
+      Content:
+        description: |-
+          SSM Change Calendar と EC2 定時起動
+        schemaVersion: "0.3"
+        parameters:
+          InstanceId:
+            type: StringList
+            description: "(Required) EC2 Instance(s) to run"
+        mainSteps:
+          - name: checkChangeCalendarOpen
+            action: aws:assertAwsResourceProperty # Asserts an event state for Change Calendar
+            onFailure: Abort
+            timeoutSeconds: 600
+            inputs:
+              Service: ssm
+              Api: GetCalendarState
+              CalendarNames: ## List of calendars to check the status.
+                - !Ref ChangeCalendarARN
+              PropertySelector: "$.State" # Returns OPEN / CLOSED as state
+              DesiredValues:
+                - OPEN
+            nextStep: StartInstance
+          - name: StartInstance
+            action: aws:changeInstanceState
+            inputs:
+              InstanceIds: "{{ InstanceId }}"
+              DesiredState: "running"
+      DocumentFormat: YAML
+      DocumentType: Automation
+      Name: !Ref DocumentNameStart
+
+  DocumentStop:
+    Type: AWS::SSM::Document
+    Properties:
+      Content:
+        description: |-
+          SSM Change Calendar と EC2 定時停止
+        schemaVersion: "0.3"
+        parameters:
+          InstanceId:
+            type: StringList
+            description: "(Required) EC2 Instance(s) to run"
+        mainSteps:
+          - name: checkChangeCalendarOpen
+            action: aws:assertAwsResourceProperty # Asserts an event state for Change Calendar
+            onFailure: Abort
+            timeoutSeconds: 600
+            inputs:
+              Service: ssm
+              Api: GetCalendarState
+              CalendarNames: ## List of calendars to check the status.
+                - !Ref ChangeCalendarARN
+              PropertySelector: "$.State" # Returns OPEN / CLOSED as state
+              DesiredValues:
+                - OPEN
+            nextStep: StopInstance
+          - name: StopInstance
+            action: aws:changeInstanceState
+            inputs:
+              InstanceIds: "{{ InstanceId }}"
+              DesiredState: "stopped"
+      DocumentFormat: YAML
+      DocumentType: Automation
+      Name: !Ref DocumentNameStop
+
+  ## ResourceGroup
+  EC2ResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name: !Ref ResourceGroupName
+      ResourceQuery:
+        Type: "TAG_FILTERS_1_0"
+        Query:
+          ResourceTypeFilters:
+            - "AWS::EC2::Instance"
+          TagFilters:
+            - Key: !Ref EC2TagKey
+              Values:
+                - !Ref EC2TagValue
+
+  ## Maitanance Window for EC2 start
+  MaitenanceWindowStart:
+    Type: AWS::SSM::MaintenanceWindow
+    Properties:
+      AllowUnassociatedTargets: true
+      Cutoff: 0
+      Duration: 1
+      Name: !Ref DocumentNameStart
+      Schedule: !Ref CronExpressionStart
+      ScheduleTimezone: "Asia/Tokyo"
+
+  MaitenanceWindowTargetStart:
+    Type: AWS::SSM::MaintenanceWindowTarget
+    Properties:
+      Name: !Ref DocumentNameStart
+      ResourceType: RESOURCE_GROUP
+      Targets:
+        - Key: "resource-groups:Name"
+          Values:
+            - !Ref EC2ResourceGroup
+      WindowId: !Ref MaitenanceWindowStart
+
+  MaitenanceWindowTaskStart:
+    Type: AWS::SSM::MaintenanceWindowTask
+    Properties:
+      Name: !Ref DocumentNameStart
+      MaxConcurrency: "7"
+      MaxErrors: "1"
+      Priority: 0
+      ServiceRoleArn: !GetAtt IAMROLE.Arn
+      Targets:
+        - Key: "WindowTargetIds"
+          Values:
+            - !Ref MaitenanceWindowTargetStart
+      TaskArn: !Ref DocumentStart
+      TaskType: AUTOMATION
+      WindowId: !Ref MaitenanceWindowStart
+      TaskInvocationParameters:
+        MaintenanceWindowAutomationParameters:
+          DocumentVersion: "$DEFAULT"
+          Parameters:
+            InstanceId:
+              - "{{ RESOURCE_ID }}"
+
+  ## Maitanance Window for EC2 Stop
+  MaitenanceWindowStop:
+    Type: AWS::SSM::MaintenanceWindow
+    Properties:
+      AllowUnassociatedTargets: true
+      Cutoff: 0
+      Duration: 1
+      Name: !Ref DocumentNameStop
+      Schedule: !Ref CronExpressionStop
+      ScheduleTimezone: "Asia/Tokyo"
+
+  MaitenanceWindowTargetStop:
+    Type: AWS::SSM::MaintenanceWindowTarget
+    Properties:
+      Name: !Ref DocumentNameStop
+      ResourceType: RESOURCE_GROUP
+      Targets:
+        - Key: "resource-groups:Name"
+          Values:
+            - !Ref EC2ResourceGroup
+      WindowId: !Ref MaitenanceWindowStop
+
+  MaitenanceWindowTaskStop:
+    Type: AWS::SSM::MaintenanceWindowTask
+    Properties:
+      Name: !Ref DocumentNameStop
+      MaxConcurrency: "7"
+      MaxErrors: "1"
+      Priority: 0
+      ServiceRoleArn: !GetAtt IAMROLE.Arn
+      Targets:
+        - Key: "WindowTargetIds"
+          Values:
+            - !Ref MaitenanceWindowTargetStop
+      TaskArn: !Ref DocumentStop
+      TaskType: AUTOMATION
+      WindowId: !Ref MaitenanceWindowStop
+      TaskInvocationParameters:
+        MaintenanceWindowAutomationParameters:
+          DocumentVersion: "$DEFAULT"
+          Parameters:
+            InstanceId:
+              - "{{ RESOURCE_ID }}"
