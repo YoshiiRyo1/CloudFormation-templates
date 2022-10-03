@@ -228,7 +228,7 @@ Resources:
     Properties:
       Name: !Ref DocumentNameStart
       MaxConcurrency: "7"
-      MaxErrors: "1"
+      MaxErrors: "7"
       Priority: 0
       ServiceRoleArn: !GetAtt IAMROLE.Arn
       Targets:
@@ -272,7 +272,7 @@ Resources:
     Properties:
       Name: !Ref DocumentNameStop
       MaxConcurrency: "7"
-      MaxErrors: "1"
+      MaxErrors: "7"
       Priority: 0
       ServiceRoleArn: !GetAtt IAMROLE.Arn
       Targets:
